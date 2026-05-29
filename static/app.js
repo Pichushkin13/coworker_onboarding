@@ -901,6 +901,78 @@ function textArea(id, label, value = "", code = false) {
   return `<div class="field"><label>${esc(label)}</label><textarea id="${id}" class="${code ? "code-area" : ""}">${esc(value)}</textarea></div>`;
 }
 
+function richTextEditor(id, label) {
+  return `
+    <div class="field">
+      <label>${esc(label)}</label>
+      <div class="text-editor" data-editor="${esc(id)}">
+        <div class="text-editor-toolbar">
+          <div class="toolbar-group">
+            <select class="toolbar-style-select" title="Text style" onchange="applyTextBlock('${esc(id)}', this.value)">
+              <option value="P">Normal text</option>
+              <option value="H1">Heading 1</option>
+              <option value="H2">Heading 2</option>
+              <option value="H3">Heading 3</option>
+              <option value="BLOCKQUOTE">Quote</option>
+            </select>
+          </div>
+          <div class="toolbar-group">
+            <button class="toolbar-btn" type="button" title="Bold" aria-label="Bold" onclick="formatTextEditor('${esc(id)}','bold')"><b>B</b></button>
+            <button class="toolbar-btn" type="button" title="Italic" aria-label="Italic" onclick="formatTextEditor('${esc(id)}','italic')"><i>I</i></button>
+            <button class="toolbar-btn" type="button" title="Underline" aria-label="Underline" onclick="formatTextEditor('${esc(id)}','underline')"><span class="underline-icon">U</span></button>
+          </div>
+          <div class="toolbar-group">
+            <button class="toolbar-btn" type="button" title="Bulleted list" aria-label="Bulleted list" onclick="formatTextEditor('${esc(id)}','insertUnorderedList')"><span class="list-icon bullet-list-icon"></span></button>
+            <button class="toolbar-btn" type="button" title="Numbered list" aria-label="Numbered list" onclick="formatTextEditor('${esc(id)}','insertOrderedList')"><span class="list-icon number-list-icon"></span></button>
+            <button class="toolbar-btn" type="button" title="Quote" aria-label="Quote" onclick="applyTextBlock('${esc(id)}','BLOCKQUOTE')"><span class="quote-icon">"</span></button>
+          </div>
+          <div class="toolbar-group">
+            <button class="toolbar-btn" type="button" title="Insert link" aria-label="Insert link" onclick="addTextEditorLink('${esc(id)}')"><span class="link-icon"></span></button>
+            <button class="toolbar-btn" type="button" title="Remove formatting" aria-label="Remove formatting" onclick="formatTextEditor('${esc(id)}','removeFormat')"><span class="clear-format-icon">Tx</span></button>
+          </div>
+        </div>
+        <div id="${esc(id)}" class="text-editor-area" contenteditable="true" data-placeholder="Start typing..."></div>
+      </div>
+    </div>
+  `;
+}
+
+function initRichTextEditor(id, html) {
+  const editor = $(id);
+  if (!editor) return;
+  editor.innerHTML = sanitizeRichHtml(html || "<h2>Title</h2><p>Text</p>");
+}
+
+function focusTextEditor(id) {
+  const editor = $(id);
+  if (editor) editor.focus();
+}
+
+function formatTextEditor(id, command, value = null) {
+  focusTextEditor(id);
+  document.execCommand(command, false, value);
+}
+
+function applyTextBlock(id, blockName) {
+  focusTextEditor(id);
+  document.execCommand("formatBlock", false, blockName);
+}
+
+function addTextEditorLink(id) {
+  focusTextEditor(id);
+  const url = prompt("Link URL");
+  if (!url) return;
+  if (!/^(https?:\/\/|mailto:|#)/i.test(url)) {
+    alert("Use http(s), mailto, or # links.");
+    return;
+  }
+  document.execCommand("createLink", false, url);
+}
+
+function richTextValue(id) {
+  return sanitizeRichHtml($(id)?.innerHTML || "");
+}
+
 function selectField(id, label, options, selected) {
   return `<div class="field"><label>${esc(label)}</label><select id="${id}">${options.map((o) => `<option value="${esc(o.value)}" ${String(o.value) === String(selected) ? "selected" : ""}>${esc(o.label)}</option>`).join("")}</select></div>`;
 }
@@ -1066,7 +1138,9 @@ function renderActivityFields(activity) {
   if (type === "html_content" || type === "content") {
     box.innerHTML = textArea("ae_content", "HTML content", activity?.content || "<div><h2>Title</h2><p>Text</p></div>", true);
   } else if (type === "text") {
-    box.innerHTML = textArea("ae_rich_html", "HTML text", cfg.html || "<h2>Title</h2><p>Text</p>", true);
+    const initialHtml = cfg.html || `<h2>${esc(cfg.heading || "Title")}</h2><p>${esc(cfg.text || "Text").replace(/\n/g, "<br>")}</p>`;
+    box.innerHTML = richTextEditor("ae_text_editor", "Text editor");
+    initRichTextEditor("ae_text_editor", initialHtml);
   } else if (type === "image") {
     box.innerHTML = textField("ae_image", "Image URL", cfg.imageUrl || "") + textField("ae_caption", "Caption", cfg.caption || "");
   } else if (type === "practice_quiz" || type === "quiz") {
@@ -1162,7 +1236,7 @@ async function saveActivity(moduleId, activityId = "", insertBefore = "", insert
     let validation = {};
 
     if (type === "html_content" || type === "content") payload.content = val("ae_content");
-    else if (type === "text") cfg = { html: val("ae_rich_html") };
+    else if (type === "text") cfg = { html: richTextValue("ae_text_editor") };
     else if (type === "image") cfg = { imageUrl: val("ae_image"), caption: val("ae_caption") };
     else if (type === "practice_quiz" || type === "quiz") {
       cfg = {
