@@ -7,6 +7,7 @@ let state = {
   sqlRuntime: {},
   pythonRuntime: {},
   dragItem: null,
+  richTextEditors: {},
   countdownId: null,
   timedSubmitStarted: false,
   pythonPreload: "idle"
@@ -878,6 +879,7 @@ function modal(html) {
 }
 
 function closeModal() {
+  disposeRichTextEditors();
   $("editorModal")?.close();
 }
 
@@ -905,34 +907,7 @@ function richTextEditor(id, label) {
   return `
     <div class="field">
       <label>${esc(label)}</label>
-      <div class="text-editor" data-editor="${esc(id)}">
-        <div class="text-editor-toolbar">
-          <div class="toolbar-group">
-            <select class="toolbar-style-select" title="Text style" onchange="applyTextBlock('${esc(id)}', this.value)">
-              <option value="P">Normal text</option>
-              <option value="H1">Heading 1</option>
-              <option value="H2">Heading 2</option>
-              <option value="H3">Heading 3</option>
-              <option value="BLOCKQUOTE">Quote</option>
-            </select>
-          </div>
-          <div class="toolbar-group">
-            <button class="toolbar-btn" type="button" title="Bold" aria-label="Bold" onclick="formatTextEditor('${esc(id)}','bold')"><b>B</b></button>
-            <button class="toolbar-btn" type="button" title="Italic" aria-label="Italic" onclick="formatTextEditor('${esc(id)}','italic')"><i>I</i></button>
-            <button class="toolbar-btn" type="button" title="Underline" aria-label="Underline" onclick="formatTextEditor('${esc(id)}','underline')"><span class="underline-icon">U</span></button>
-          </div>
-          <div class="toolbar-group">
-            <button class="toolbar-btn" type="button" title="Bulleted list" aria-label="Bulleted list" onclick="formatTextEditor('${esc(id)}','insertUnorderedList')"><span class="list-icon bullet-list-icon"></span></button>
-            <button class="toolbar-btn" type="button" title="Numbered list" aria-label="Numbered list" onclick="formatTextEditor('${esc(id)}','insertOrderedList')"><span class="list-icon number-list-icon"></span></button>
-            <button class="toolbar-btn" type="button" title="Quote" aria-label="Quote" onclick="applyTextBlock('${esc(id)}','BLOCKQUOTE')"><span class="quote-icon">"</span></button>
-          </div>
-          <div class="toolbar-group">
-            <button class="toolbar-btn" type="button" title="Insert link" aria-label="Insert link" onclick="addTextEditorLink('${esc(id)}')"><span class="link-icon"></span></button>
-            <button class="toolbar-btn" type="button" title="Remove formatting" aria-label="Remove formatting" onclick="formatTextEditor('${esc(id)}','removeFormat')"><span class="clear-format-icon">Tx</span></button>
-          </div>
-        </div>
-        <div id="${esc(id)}" class="text-editor-area" contenteditable="true" data-placeholder="Start typing..."></div>
-      </div>
+      <div id="${esc(id)}" class="text-editor"></div>
     </div>
   `;
 }
@@ -940,37 +915,50 @@ function richTextEditor(id, label) {
 function initRichTextEditor(id, html) {
   const editor = $(id);
   if (!editor) return;
-  editor.innerHTML = sanitizeRichHtml(html || "<h2>Title</h2><p>Text</p>");
-}
-
-function focusTextEditor(id) {
-  const editor = $(id);
-  if (editor) editor.focus();
-}
-
-function formatTextEditor(id, command, value = null) {
-  focusTextEditor(id);
-  document.execCommand(command, false, value);
-}
-
-function applyTextBlock(id, blockName) {
-  focusTextEditor(id);
-  document.execCommand("formatBlock", false, blockName);
-}
-
-function addTextEditorLink(id) {
-  focusTextEditor(id);
-  const url = prompt("Link URL");
-  if (!url) return;
-  if (!/^(https?:\/\/|mailto:|#)/i.test(url)) {
-    alert("Use http(s), mailto, or # links.");
+  const initialHtml = sanitizeRichHtml(html || "<h2>Title</h2><p>Text</p>");
+  if (typeof Quill === "undefined") {
+    editor.innerHTML = `<textarea id="${esc(id)}_fallback" class="rich-editor-fallback">${esc(initialHtml)}</textarea>`;
     return;
   }
-  document.execCommand("createLink", false, url);
+  const quill = new Quill(editor, {
+    theme: "snow",
+    placeholder: "Start typing...",
+    modules: {
+      toolbar: [
+        [{ header: [1, 2, 3, false] }],
+        ["bold", "italic", "underline", "strike"],
+        [{ list: "ordered" }, { list: "bullet" }],
+        ["blockquote", "link"],
+        ["clean"]
+      ]
+    },
+    formats: [
+      "header",
+      "bold",
+      "italic",
+      "underline",
+      "strike",
+      "list",
+      "blockquote",
+      "link"
+    ]
+  });
+  quill.clipboard.dangerouslyPasteHTML(initialHtml);
+  state.richTextEditors[id] = quill;
 }
 
 function richTextValue(id) {
-  return sanitizeRichHtml($(id)?.innerHTML || "");
+  const quill = state.richTextEditors[id];
+  if (quill) {
+    return sanitizeRichHtml(quill.root.innerHTML || "");
+  }
+  return sanitizeRichHtml($(`${id}_fallback`)?.value || $(id)?.innerHTML || "");
+}
+
+function disposeRichTextEditors() {
+  Object.keys(state.richTextEditors).forEach((id) => {
+    if (!document.getElementById(id)) delete state.richTextEditors[id];
+  });
 }
 
 function selectField(id, label, options, selected) {
