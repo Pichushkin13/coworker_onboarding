@@ -769,6 +769,11 @@ th {
   margin: 10px 0;
 }
 
+.editor-hint {
+  font-size: 13px;
+  margin: 6px 0 10px;
+}
+
 .repeat-row,
 .pair-row,
 .answer-row {

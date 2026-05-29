@@ -86,6 +86,38 @@ function isDirectVideoUrl(url) {
   return /\.(mp4|webm|ogg|mov|m4v)(\?.*)?$/i.test(String(url || "").trim());
 }
 
+function embeddableVideoUrl(url) {
+  const raw = String(url || "").trim();
+  try {
+    const parsed = new URL(raw, window.location.origin);
+    const host = parsed.hostname.replace(/^www\./, "").toLowerCase();
+    let videoId = "";
+
+    if (host === "youtu.be") {
+      videoId = parsed.pathname.split("/").filter(Boolean)[0] || "";
+    } else if (host === "youtube.com" || host === "m.youtube.com" || host === "music.youtube.com" || host === "youtube-nocookie.com") {
+      const parts = parsed.pathname.split("/").filter(Boolean);
+      if (parsed.pathname === "/watch") videoId = parsed.searchParams.get("v") || "";
+      else if (parts[0] === "shorts" || parts[0] === "embed" || parts[0] === "live") videoId = parts[1] || "";
+    }
+
+    if (videoId) {
+      const embed = new URL(`https://www.youtube-nocookie.com/embed/${videoId}`);
+      const start = parsed.searchParams.get("start") || parsed.searchParams.get("t");
+      if (start) embed.searchParams.set("start", String(start).replace(/[^\d]/g, ""));
+      return embed.toString();
+    }
+
+    if (host === "vimeo.com") {
+      const videoPath = parsed.pathname.split("/").filter(Boolean).find((part) => /^\d+$/.test(part));
+      if (videoPath) return `https://player.vimeo.com/video/${videoPath}`;
+    }
+  } catch {
+    return raw;
+  }
+  return raw;
+}
+
 function normalize(payload) {
   payload.courses = payload.courses || [];
   payload.modules = payload.modules || [];
@@ -269,16 +301,18 @@ function renderVideo(a) {
   const poster = String(cfg.posterUrl || "").trim();
   const caption = cfg.caption || "";
   const mode = cfg.sourceType || (isDirectVideoUrl(url) ? "file" : "embed");
+  const embedUrl = embeddableVideoUrl(url);
+  const shouldEmbed = mode === "embed" || embedUrl !== url;
 
   if (!url) return `<div class="result warn">Video URL is not configured.</div>`;
   if (!isSafeMediaUrl(url)) return `<div class="result error">Video URL must start with http(s):// or /.</div>`;
 
-  const media = mode === "file" || isDirectVideoUrl(url)
+  const media = !shouldEmbed && (mode === "file" || isDirectVideoUrl(url))
     ? `<video controls preload="metadata" ${poster && isSafeMediaUrl(poster) ? `poster="${esc(poster)}"` : ""}>
         <source src="${esc(url)}">
         Your browser does not support the video tag.
       </video>`
-    : `<iframe src="${esc(url)}" title="${esc(a.title || caption || "Video")}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen loading="lazy"></iframe>`;
+    : `<iframe src="${esc(embedUrl)}" title="${esc(a.title || caption || "Video")}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen loading="lazy"></iframe>`;
 
   return `
     <figure class="video-block">
@@ -1173,6 +1207,7 @@ function renderActivityFields(activity) {
       </div>
       ${textField("ae_poster", "Poster image URL", cfg.posterUrl || "")}
       ${textField("ae_caption", "Caption", cfg.caption || "")}
+      <div class="muted editor-hint">You can paste a YouTube, youtu.be, Shorts, Vimeo, embed URL, or a direct video file URL from your server.</div>
     `;
   } else if (type === "practice_quiz" || type === "quiz") {
     box.innerHTML = textArea("ae_intro", "Intro", cfg.intro || "") + `<div id="quizQuestions"></div><button class="btn ghost small" onclick="addQuestion()">+ Add question</button>`;
