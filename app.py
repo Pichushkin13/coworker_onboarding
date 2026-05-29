@@ -259,7 +259,7 @@ def activity_insert_order(conn, module_id, payload):
 
 
 def validate_activity_type(module, activity_type):
-    learning = {"html_content", "text", "content", "image", "practice_quiz", "drag_mapping", "drag_order", "sql_practice", "python_practice"}
+    learning = {"html_content", "text", "content", "image", "video", "practice_quiz", "drag_mapping", "drag_order", "sql_practice", "python_practice"}
     assessment = {"quiz", "sql_task", "python_task", "open_answer"}
     allowed = assessment if module["moduleType"] == "assessment" else learning
     if activity_type not in allowed:

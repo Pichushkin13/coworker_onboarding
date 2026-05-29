@@ -371,6 +371,39 @@ dialog button:hover {
   font-size: 13px;
 }
 
+.video-block {
+  margin: 14px 0;
+}
+
+.video-frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #111715;
+}
+
+.video-frame video,
+.video-frame iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.video-frame video {
+  object-fit: contain;
+}
+
+.video-block figcaption {
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .task-card {
   padding: 15px;
   background: var(--soft);

@@ -78,6 +78,14 @@ function truthy(v) {
   return v === true || ["true", "1", "yes", "on"].includes(String(v).toLowerCase());
 }
 
+function isSafeMediaUrl(url) {
+  return /^(https?:\/\/|\/)/i.test(String(url || "").trim());
+}
+
+function isDirectVideoUrl(url) {
+  return /\.(mp4|webm|ogg|mov|m4v)(\?.*)?$/i.test(String(url || "").trim());
+}
+
 function normalize(payload) {
   payload.courses = payload.courses || [];
   payload.modules = payload.modules || [];
@@ -235,6 +243,7 @@ function renderActivity(a, assessment) {
     return `<div class="rich-text-brick">${sanitizeRichHtml(html)}</div>`;
   }
   if (a.activityType === "image") return renderImage(a);
+  if (a.activityType === "video") return renderVideo(a);
   if (a.activityType === "practice_quiz" || a.activityType === "quiz") return renderQuiz(a, assessment);
   if (a.activityType === "drag_mapping") return renderMapping(a);
   if (a.activityType === "drag_order") return renderOrder(a);
@@ -250,6 +259,31 @@ function renderImage(a) {
     <figure class="image-block">
       <img src="${esc(a.config.imageUrl || "")}" alt="${esc(a.config.caption || a.title || "")}">
       ${a.config.caption ? `<figcaption>${esc(a.config.caption)}</figcaption>` : ""}
+    </figure>
+  `;
+}
+
+function renderVideo(a) {
+  const cfg = a.config || {};
+  const url = String(cfg.videoUrl || "").trim();
+  const poster = String(cfg.posterUrl || "").trim();
+  const caption = cfg.caption || "";
+  const mode = cfg.sourceType || (isDirectVideoUrl(url) ? "file" : "embed");
+
+  if (!url) return `<div class="result warn">Video URL is not configured.</div>`;
+  if (!isSafeMediaUrl(url)) return `<div class="result error">Video URL must start with http(s):// or /.</div>`;
+
+  const media = mode === "file" || isDirectVideoUrl(url)
+    ? `<video controls preload="metadata" ${poster && isSafeMediaUrl(poster) ? `poster="${esc(poster)}"` : ""}>
+        <source src="${esc(url)}">
+        Your browser does not support the video tag.
+      </video>`
+    : `<iframe src="${esc(url)}" title="${esc(a.title || caption || "Video")}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen loading="lazy"></iframe>`;
+
+  return `
+    <figure class="video-block">
+      <div class="video-frame">${media}</div>
+      ${caption ? `<figcaption>${esc(caption)}</figcaption>` : ""}
     </figure>
   `;
 }
@@ -1101,7 +1135,7 @@ function openActivityEditor(moduleId, activityId = "", insertBefore = "", insert
   const activity = activityId ? findActivity(activityId) : null;
   const types = module.moduleType === "assessment"
     ? [["quiz", "Quiz"], ["sql_task", "SQL task"], ["python_task", "Python task"], ["open_answer", "Open answer"]]
-    : [["html_content", "HTML content"], ["text", "Text"], ["image", "Image"], ["practice_quiz", "Practice quiz"], ["drag_mapping", "Drag mapping"], ["drag_order", "Drag order"], ["sql_practice", "SQL practice"], ["python_practice", "Python practice"]];
+    : [["html_content", "HTML content"], ["text", "Text"], ["image", "Image"], ["video", "Video player"], ["practice_quiz", "Practice quiz"], ["drag_mapping", "Drag mapping"], ["drag_order", "Drag order"], ["sql_practice", "SQL practice"], ["python_practice", "Python practice"]];
   modal(`
     ${modalHeader(activityId ? "Edit activity" : "Add activity")}
     <div class="grid-2">
@@ -1131,6 +1165,15 @@ function renderActivityFields(activity) {
     initRichTextEditor("ae_text_editor", initialHtml);
   } else if (type === "image") {
     box.innerHTML = textField("ae_image", "Image URL", cfg.imageUrl || "") + textField("ae_caption", "Caption", cfg.caption || "");
+  } else if (type === "video") {
+    box.innerHTML = `
+      <div class="grid-2">
+        ${selectField("ae_video_source", "Source type", [{ value: "file", label: "Video file URL" }, { value: "embed", label: "Embed/page URL" }], cfg.sourceType || "file")}
+        ${textField("ae_video", "Video URL", cfg.videoUrl || "")}
+      </div>
+      ${textField("ae_poster", "Poster image URL", cfg.posterUrl || "")}
+      ${textField("ae_caption", "Caption", cfg.caption || "")}
+    `;
   } else if (type === "practice_quiz" || type === "quiz") {
     box.innerHTML = textArea("ae_intro", "Intro", cfg.intro || "") + `<div id="quizQuestions"></div><button class="btn ghost small" onclick="addQuestion()">+ Add question</button>`;
     (cfg.questions || [{ question: "", options: ["", ""], correctAnswers: [0] }]).forEach((q) => addQuestion(q));
@@ -1226,6 +1269,7 @@ async function saveActivity(moduleId, activityId = "", insertBefore = "", insert
     if (type === "html_content" || type === "content") payload.content = val("ae_content");
     else if (type === "text") cfg = { html: richTextValue("ae_text_editor") };
     else if (type === "image") cfg = { imageUrl: val("ae_image"), caption: val("ae_caption") };
+    else if (type === "video") cfg = { sourceType: val("ae_video_source") || "file", videoUrl: val("ae_video"), posterUrl: val("ae_poster"), caption: val("ae_caption") };
     else if (type === "practice_quiz" || type === "quiz") {
       cfg = {
         intro: val("ae_intro"),
