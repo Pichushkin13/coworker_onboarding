@@ -7,8 +7,25 @@
 
 ## Запуск
 
+### macOS
+
 ```bash
-cd training_app
+cd /path/to/coworker_onboarding
+python3 app.py
+```
+
+### Windows
+
+В PowerShell или Command Prompt:
+
+```powershell
+cd C:\path\to\coworker_onboarding
+py app.py
+```
+
+Если команда `py` не найдена, попробуйте:
+
+```powershell
 python app.py
 ```
 
